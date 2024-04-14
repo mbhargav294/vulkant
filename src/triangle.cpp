@@ -15,6 +15,8 @@ VulkanStarterTriangle::VulkanStarterTriangle(int width, int height) {
     this->window = nullptr;
     this->instance = nullptr;
     this->validationLayers = {"VK_LAYER_KHRONOS_validation"};
+
+    this->physicalDevice = VK_NULL_HANDLE;
 }
 
 void VulkanStarterTriangle::run() {
@@ -43,6 +45,7 @@ void VulkanStarterTriangle::initWindow() {
 void VulkanStarterTriangle::initVulkan() {
     createInstance();
     setupDebugMessenger();
+    pickPhysicalDevice();
 }
 
 void VulkanStarterTriangle::createInstance() {
@@ -130,4 +133,27 @@ void VulkanStarterTriangle::setupDebugMessenger() {
     if (CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessenger) != VK_SUCCESS) {
         throw std::runtime_error("Failed to set up debug messenger!");
     }
+}
+
+void VulkanStarterTriangle::pickPhysicalDevice() {
+    uint32_t deviceCount = 0;
+    vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
+
+    if (deviceCount == 0) { throw std::runtime_error("Failed to find GPUs with Vulkan support!"); }
+
+    std::vector<VkPhysicalDevice> devices(deviceCount);
+    vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
+
+    int maxScore = 0;
+    VkPhysicalDevice selectedDevice = VK_NULL_HANDLE;
+    for (const auto &device: devices) {
+        int score = deviceScore(device);
+        if (0 <= score) {
+            maxScore = score;
+            selectedDevice = device;
+        }
+    }
+
+    if (0 == maxScore) { throw std::runtime_error("Failed to find suitable GPU!"); }
+    physicalDevice = selectedDevice;
 }

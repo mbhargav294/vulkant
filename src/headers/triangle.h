@@ -1,5 +1,6 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#include <format>
 #include <iomanip>
 #include <iostream>
 #include <set>
@@ -21,6 +22,7 @@ private:
     VkInstance instance;
     VkDebugUtilsMessengerEXT debugMessenger;
     std::vector<const char *> validationLayers;
+    VkPhysicalDevice physicalDevice;
 
     void initWindow();
     void createInstance();
@@ -29,7 +31,9 @@ private:
     void cleanup();
     bool checkValidationLayerSupport();
     void setupDebugMessenger();
+    void pickPhysicalDevice();
 
+    static constexpr std::string_view divider = "|---------------------------------------------------------------|";
 
     static std::vector<const char *> getRequiredExtensions() {
         {
@@ -61,21 +65,13 @@ private:
         vkEnumerateInstanceExtensionProperties(nullptr, &availableExtensionCount, availableExtensions.data());
 
         // Print statements to structure the output as a table
-        std::string divider = "-----------------------------------------------------------------";
+        std::cout << std::endl << "Available and Enabled Extensions" << std::endl;
         std::cout << divider << std::endl;
-        std::cout << "Available and Enabled Extensions" << std::endl;
-        std::cout << divider << std::endl;
-        std::cout << "| ";
-        std::cout << std::left << std::setw(10) << "Enabled" << std::setw(0) << "| ";
-        std::cout << std::left << std::setw(50) << "Available Extensions" << std::setw(0) << "|";
-        std::cout << std::endl;
+        printTableLine("Enabled", "Available Extensions", 10, 50);
         std::cout << divider << std::endl;
         for (const auto &extension: availableExtensions) {
-            std::cout << "| ";
-            std::cout << std::left << std::setw(10)
-                      << (enabledExtensionNames.contains(extension.extensionName) ? "Yes" : "") << std::setw(0) << "| ";
-            std::cout << std::left << std::setw(50) << extension.extensionName << std::setw(0) << "|";
-            std::cout << std::endl;
+            printTableLine((enabledExtensionNames.contains(extension.extensionName) ? "Yes" : ""),
+                           extension.extensionName, 10, 50);
         }
         std::cout << divider << std::endl;
     }
@@ -93,6 +89,9 @@ private:
                                                         VkDebugUtilsMessageTypeFlagsEXT messageType,
                                                         const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
                                                         void *pUserData) {
+        // Show only WARN or above logs
+        if (messageSeverity <= VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) { return VK_FALSE; }
+
         std::string logType;
         switch (messageSeverity) {
             case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
@@ -180,6 +179,62 @@ private:
         auto func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance,
                                                                                 "vkDestroyDebugUtilsMessengerEXT");
         if (nullptr != func) { func(instance, debugMessenger, pAllocator); }
+    }
+
+    /**
+     * Checks if the device is the Discrete GPU and if it supports Geometry Shader
+     *
+     * @param device
+     * @return
+     */
+    static int deviceScore(VkPhysicalDevice device) {
+        VkPhysicalDeviceProperties deviceProperties;
+        vkGetPhysicalDeviceProperties(device, &deviceProperties);
+
+        VkPhysicalDeviceFeatures deviceFeatures;
+        vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+
+        std::cout << std::endl << "Listing available GPUs" << std::endl;
+        std::cout << divider << std::endl;
+        printTableLine("Name", deviceProperties.deviceName, 30, 30);
+        std::cout << divider << std::endl;
+        printTableLine("ID", std::format("{}", deviceProperties.deviceID), 30, 30);
+        printTableLine("Vendor ID", std::format("{}", deviceProperties.vendorID), 30, 30);
+        printTableLine("Max 2D image dimensions", std::format("{}", deviceProperties.limits.maxImageDimension2D), 30,
+                       30);
+        printTableLine("API Version", std::format("{}", deviceProperties.apiVersion), 30, 30);
+        printTableLine("Driver Version", std::format("{}", deviceProperties.driverVersion), 30, 30);
+        printTableLine("Geometry Shader", std::format("{}", deviceFeatures.geometryShader), 30, 30);
+        std::cout << divider << std::endl;
+
+        int score = 0;
+
+        // Add maximum score for discrete GPUs
+        if (VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU == deviceProperties.deviceType) { score += 1000; }
+
+        // Add maximum supported texture size to overall score
+        score += static_cast<int>(deviceProperties.limits.maxImageDimension2D);
+
+        // If GPU does not support Geometry Shader
+        if (!deviceFeatures.geometryShader) { score = 0; }
+
+        printTableLine("Score", std::format("{}", score), 30, 30);
+        std::cout << divider << std::endl;
+
+        return score;
+    }
+
+    /**
+     * Print a single row to console in a tabular format
+     *
+     * @param col1
+     * @param col2
+     * @param col1Width
+     * @param col2Width
+     */
+    static void printTableLine(const std::string &col1, const std::string &col2, int col1Width, int col2Width) {
+        std::cout << std::left << "| " << std::setw(col1Width) << col1 << "| " << std::setw(col2Width) << col2
+                  << std::setw(0) << "|" << std::endl;
     }
 };
 
