@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.28)
 project(starter)
 
 set(CMAKE_CXX_STANDARD 23)
+add_subdirectory(src)
 
 include(FetchContent)
 
@@ -47,11 +48,13 @@ set(CURRENT_PACKAGE "GLFW")
     endif ()
 unset(CURRENT_PACKAGE)
 
+# Vulkan
 find_package(Vulkan REQUIRED)
 
-add_executable(starter)
-
-target_sources(starter PRIVATE main.cpp)
+add_executable(starter src/headers/
+        src/triangle.cpp
+        src/headers/triangle.h)
+target_sources(starter PRIVATE src/main.cpp)
 
 target_link_libraries(
         starter
