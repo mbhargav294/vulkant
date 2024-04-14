@@ -1,9 +1,7 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#include <cstring>
 #include <format>
-#include <iomanip>
-#include <iostream>
-#include <set>
 #include <stdexcept>
 #include <vector>
 
@@ -16,6 +14,7 @@ VulkanStarterTriangle::VulkanStarterTriangle(int width, int height) {
 
     this->window = nullptr;
     this->instance = nullptr;
+    this->validationLayers = {"VK_LAYER_KHRONOS_validation"};
 }
 
 void VulkanStarterTriangle::run() {
@@ -41,9 +40,16 @@ void VulkanStarterTriangle::initWindow() {
     window = glfwCreateWindow(width, height, "Vulkan Triangle", nullptr, nullptr);
 }
 
-void VulkanStarterTriangle::initVulkan() { createInstance(); }
+void VulkanStarterTriangle::initVulkan() {
+    createInstance();
+    setupDebugMessenger();
+}
 
 void VulkanStarterTriangle::createInstance() {
+#ifndef NDEBUG
+    if (!checkValidationLayerSupport()) { throw std::runtime_error("validation layers requested, but not available!"); }
+#endif
+
     // (Optional) Metadata to the driver about this application
     VkApplicationInfo appInfo = {
             .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -55,56 +61,33 @@ void VulkanStarterTriangle::createInstance() {
     };
 
     // Fetch all the required Instance Extensions
-    uint32_t glfwExtensionCount;
-    const char **glfwExtensions;
-    glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+    std::vector<const char *> extensions = getRequiredExtensions();
 
     // Display debug information about all available extensions and the ones that will be enabled
-    extensionDebugInfo(glfwExtensionCount, glfwExtensions);
+    extensionDebugInfo(extensions);
 
     // Define and create a Vulkan instance
     VkInstanceCreateInfo createInfo = {
             .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
             .pApplicationInfo = &appInfo,
-            .enabledExtensionCount = glfwExtensionCount,
-            .ppEnabledExtensionNames = glfwExtensions,
+            .enabledExtensionCount = static_cast<uint32_t>(extensions.size()),
+            .ppEnabledExtensionNames = extensions.data(),
     };
+    // Add validation layers and debug logs in debug mode
+    VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo;
+#ifdef NDEBUG
+    createInfo.enabledLayerCount = 0;
+    createInfo.pNext = nullptr;
+#else
+    createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+    createInfo.ppEnabledLayerNames = validationLayers.data();
+
+    populateDebugMessengerCreateInfo(debugCreateInfo);
+    createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT *) &debugCreateInfo;
+#endif
     if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create Vk Instance!");
     }
-}
-
-/**
- * Display all available and enabled extensions on the console
- */
-void VulkanStarterTriangle::extensionDebugInfo(uint32_t enabledExtensionCount, const char **enabledExtensions) {
-    // Put all the enabled extension names into a set
-    std::set<std::string> enabledExtensionNames;
-    for (int i = 0; i < enabledExtensionCount; i++) { enabledExtensionNames.insert(enabledExtensions[i]); }
-
-    // Fetch all available availableExtensions
-    uint32_t availableExtensionCount;
-    vkEnumerateInstanceExtensionProperties(nullptr, &availableExtensionCount, nullptr);
-    std::vector<VkExtensionProperties> availableExtensions(availableExtensionCount);
-    vkEnumerateInstanceExtensionProperties(nullptr, &availableExtensionCount, availableExtensions.data());
-
-    // Print statements to structure the output as a table
-    std::string divider = "-----------------------------------------------------------------";
-    std::cout << "Available and Enabled Extensions" << std::endl;
-    std::cout << divider << std::endl;
-    std::cout << "| ";
-    std::cout << std::left << std::setw(10) << "Enabled" << std::setw(0) << "| ";
-    std::cout << std::left << std::setw(50) << "Available Extensions" << std::setw(0) << "|";
-    std::cout << std::endl;
-    std::cout << divider << std::endl;
-    for (const auto &extension: availableExtensions) {
-        std::cout << "| ";
-        std::cout << std::left << std::setw(10)
-                  << (enabledExtensionNames.contains(extension.extensionName) ? "Yes" : "") << std::setw(0) << "| ";
-        std::cout << std::left << std::setw(50) << extension.extensionName << std::setw(0) << "|";
-        std::cout << std::endl;
-    }
-    std::cout << divider << std::endl;
 }
 
 void VulkanStarterTriangle::mainLoop() {
@@ -113,7 +96,38 @@ void VulkanStarterTriangle::mainLoop() {
 }
 
 void VulkanStarterTriangle::cleanup() {
+#ifndef NDEBUG
+    DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
+#endif
     vkDestroyInstance(instance, nullptr);
     glfwDestroyWindow(window);
     glfwTerminate();
+}
+
+bool VulkanStarterTriangle::checkValidationLayerSupport() {
+    uint32_t layerCount;
+    vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+    std::vector<VkLayerProperties> availableLayers(layerCount);
+    vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+
+    for (const char *layer: validationLayers) {
+        for (const VkLayerProperties &availableLayer: availableLayers) {
+            if (strcmp(layer, availableLayer.layerName) == 0) { return true; }
+        }
+    }
+
+    return false;
+}
+
+void VulkanStarterTriangle::setupDebugMessenger() {
+#ifdef NDEBUG
+    return;
+#endif
+
+    VkDebugUtilsMessengerCreateInfoEXT createInfo;
+    populateDebugMessengerCreateInfo(createInfo);
+
+    if (CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessenger) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to set up debug messenger!");
+    }
 }

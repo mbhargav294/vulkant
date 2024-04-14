@@ -1,8 +1,9 @@
 # IDE
 .idea/
 
-# Debug
+# Builds
 cmake-build-debug
+cmake-build-release
 
 # Prerequisites
 *.d
