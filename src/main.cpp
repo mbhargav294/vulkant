@@ -4,7 +4,7 @@
 
 #include "headers/triangle.h"
 
-// Create a 800 x 600 window
+// Create an 800 x 600 window
 const int WIDTH = 800;
 const int HEIGHT = 600;
 
