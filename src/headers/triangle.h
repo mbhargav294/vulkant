@@ -24,6 +24,9 @@ private:
     VkDebugUtilsMessengerEXT debugMessenger;
     std::vector<const char *> validationLayers;
     VkPhysicalDevice physicalDevice;
+    VkDevice device;
+    VkQueue graphicsQueue;
+
     struct QueueFamilyIndices {
         std::optional<uint32_t> graphicsFamily;
 
@@ -38,6 +41,7 @@ private:
     bool checkValidationLayerSupport();
     void setupDebugMessenger();
     void pickPhysicalDevice();
+    void createLogicalDevice();
 
     static constexpr std::string_view divider = "|---------------------------------------------------------------|";
 
@@ -66,9 +70,9 @@ private:
 
         // Fetch all available availableExtensions
         uint32_t availableExtensionCount;
-        vkEnumerateInstanceExtensionProperties(nullptr, &availableExtensionCount, nullptr);
+        vkEnumerateInstanceExtensionProperties(VK_NULL_HANDLE, &availableExtensionCount, VK_NULL_HANDLE);
         std::vector<VkExtensionProperties> availableExtensions(availableExtensionCount);
-        vkEnumerateInstanceExtensionProperties(nullptr, &availableExtensionCount, availableExtensions.data());
+        vkEnumerateInstanceExtensionProperties(VK_NULL_HANDLE, &availableExtensionCount, availableExtensions.data());
 
         // Print statements to structure the output as a table
         std::cout << std::endl << "Available and Enabled Extensions" << std::endl;
@@ -145,7 +149,7 @@ private:
                                VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
                                VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
                 .pfnUserCallback = debugCallback,
-                .pUserData = nullptr,
+                .pUserData = VK_NULL_HANDLE,
         };
     }
 
@@ -165,7 +169,7 @@ private:
                                                  VkDebugUtilsMessengerEXT *pDebugMessenger) {
         auto func =
                 (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
-        if (nullptr != func) {
+        if (VK_NULL_HANDLE != func) {
             return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
         } else {
             return VK_ERROR_EXTENSION_NOT_PRESENT;
@@ -184,7 +188,7 @@ private:
                                               const VkAllocationCallbacks *pAllocator) {
         auto func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance,
                                                                                 "vkDestroyDebugUtilsMessengerEXT");
-        if (nullptr != func) { func(instance, debugMessenger, pAllocator); }
+        if (VK_NULL_HANDLE != func) { func(instance, debugMessenger, pAllocator); }
     }
 
     /**
@@ -240,7 +244,7 @@ private:
         QueueFamilyIndices indices{};
 
         uint32_t queueFamilyCount;
-        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, VK_NULL_HANDLE);
 
         std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
         vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
