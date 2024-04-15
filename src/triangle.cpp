@@ -154,6 +154,8 @@ void VulkanStarterTriangle::pickPhysicalDevice() {
         }
     }
 
-    if (0 == maxScore) { throw std::runtime_error("Failed to find suitable GPU!"); }
+    if (0 == maxScore || !isDeviceSuitable(selectedDevice)) {
+        throw std::runtime_error("Failed to find suitable GPU!");
+    }
     physicalDevice = selectedDevice;
 }

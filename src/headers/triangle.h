@@ -3,6 +3,7 @@
 #include <format>
 #include <iomanip>
 #include <iostream>
+#include <optional>
 #include <set>
 #include <vector>
 
@@ -23,6 +24,11 @@ private:
     VkDebugUtilsMessengerEXT debugMessenger;
     std::vector<const char *> validationLayers;
     VkPhysicalDevice physicalDevice;
+    struct QueueFamilyIndices {
+        std::optional<uint32_t> graphicsFamily;
+
+        [[nodiscard]] bool isComplete() const { return graphicsFamily.has_value(); }
+    };
 
     void initWindow();
     void createInstance();
@@ -222,6 +228,45 @@ private:
         std::cout << divider << std::endl;
 
         return score;
+    }
+
+    /**
+     * Find supported queues on the device and tells if any of the supported queues support graphics commands.
+     *
+     * @param device
+     * @return
+     */
+    static QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
+        QueueFamilyIndices indices{};
+
+        uint32_t queueFamilyCount;
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+
+        std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+        for (int i = 0; i < queueFamilyCount; i++) {
+            // Right most bit in the Queue Flags will be set if the queue supports Graphics
+            if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+                indices.graphicsFamily = i;
+
+                if (indices.isComplete()) { break; }
+            }
+        }
+
+        return indices;
+    }
+
+    /**
+     * Find if provide device supports graphic queues.
+     *
+     * @param device
+     * @return
+     */
+    static bool isDeviceSuitable(VkPhysicalDevice device) {
+        QueueFamilyIndices indices = findQueueFamilies(device);
+
+        return indices.isComplete();
     }
 
     /**
