@@ -13,10 +13,12 @@
 VulkanStarterTriangle::VulkanStarterTriangle(int width, int height) {
     this->width = width;
     this->height = height;
+    // TODO: Parametrize these values to the constructor
+    this->validationLayers = {"VK_LAYER_KHRONOS_validation"};
+    this->deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
     this->window = VK_NULL_HANDLE;
     this->instance = VK_NULL_HANDLE;
-    this->validationLayers = {"VK_LAYER_KHRONOS_validation"};
 
     this->debugMessenger = VK_NULL_HANDLE;
     this->physicalDevice = VK_NULL_HANDLE;
@@ -167,14 +169,14 @@ void VulkanStarterTriangle::pickPhysicalDevice() {
         }
     }
 
-    if (0 == maxScore || !isDeviceSuitable(selectedDevice, surface)) {
+    if (0 == maxScore || !isDeviceSuitable(selectedDevice)) {
         throw std::runtime_error("Failed to find suitable GPU!");
     }
     physicalDevice = selectedDevice;
 }
 
 void VulkanStarterTriangle::createLogicalDevice() {
-    QueueFamilyIndices indices = findQueueFamilies(physicalDevice, surface);
+    QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
 
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
     std::set<uint32_t> uniqueQueueFamilies = {indices.graphicsFamily.value(), indices.presetFamily.value()};
@@ -226,4 +228,79 @@ void VulkanStarterTriangle::createSurface() {
     if (vkCreateWin32SurfaceKHR(instance, &createInfo, VK_NULL_HANDLE, &surface) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create window surface!");
     }
+}
+
+VulkanStarterTriangle::QueueFamilyIndices VulkanStarterTriangle::findQueueFamilies(VkPhysicalDevice pDevice) {
+    QueueFamilyIndices indices{};
+
+    uint32_t queueFamilyCount;
+    vkGetPhysicalDeviceQueueFamilyProperties(pDevice, &queueFamilyCount, VK_NULL_HANDLE);
+
+    std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(pDevice, &queueFamilyCount, queueFamilies.data());
+
+    for (int i = 0; i < queueFamilyCount; i++) {
+        // Right most bit in the Queue Flags will be set if the queue supports Graphics
+        if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) { indices.graphicsFamily = i; }
+
+        VkBool32 presentSupport;
+        vkGetPhysicalDeviceSurfaceSupportKHR(pDevice, i, surface, &presentSupport);
+        if (presentSupport) { indices.presetFamily = i; }
+
+        if (indices.isComplete()) { break; }
+    }
+
+    return indices;
+}
+
+bool VulkanStarterTriangle::isDeviceSuitable(VkPhysicalDevice pDevice) {
+    QueueFamilyIndices indices = findQueueFamilies(pDevice);
+
+    bool extensionsSupported = checkDeviceExtensionSupport(pDevice);
+
+    bool swapChainAdequate = false;
+    if (extensionsSupported) {
+        SwapChainSupportDetails swapChainSupport = querySwapChainSupport(pDevice);
+        swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
+    }
+
+    return indices.isComplete() && extensionsSupported && swapChainAdequate;
+}
+
+bool VulkanStarterTriangle::checkDeviceExtensionSupport(VkPhysicalDevice pDevice) {
+    uint32_t extensionCount;
+    vkEnumerateDeviceExtensionProperties(pDevice, VK_NULL_HANDLE, &extensionCount, VK_NULL_HANDLE);
+
+    std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+    vkEnumerateDeviceExtensionProperties(pDevice, VK_NULL_HANDLE, &extensionCount, availableExtensions.data());
+
+    std::set<std::string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
+
+    for (const auto &extension: availableExtensions) { requiredExtensions.erase(extension.extensionName); }
+
+    return requiredExtensions.empty();
+}
+
+VulkanStarterTriangle::SwapChainSupportDetails VulkanStarterTriangle::querySwapChainSupport(VkPhysicalDevice pDevice) {
+    VulkanStarterTriangle::SwapChainSupportDetails details;
+
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(pDevice, surface, &details.capabilities);
+
+    uint32_t formatCount;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(pDevice, surface, &formatCount, VK_NULL_HANDLE);
+
+    if (formatCount != 0) {
+        details.formats.resize(formatCount);
+        vkGetPhysicalDeviceSurfaceFormatsKHR(pDevice, surface, &formatCount, details.formats.data());
+    }
+
+    uint32_t presentModeCount;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(pDevice, surface, &presentModeCount, VK_NULL_HANDLE);
+
+    if (presentModeCount != 0) {
+        details.presentModes.resize(presentModeCount);
+        vkGetPhysicalDeviceSurfacePresentModesKHR(pDevice, surface, &presentModeCount, details.presentModes.data());
+    }
+
+    return details;
 }

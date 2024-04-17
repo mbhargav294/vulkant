@@ -26,6 +26,7 @@ private:
     VkInstance instance;
     VkDebugUtilsMessengerEXT debugMessenger;
     std::vector<const char *> validationLayers;
+    std::vector<const char *> deviceExtensions;
     VkPhysicalDevice physicalDevice;
     VkDevice device;
     VkSurfaceKHR surface;
@@ -39,6 +40,12 @@ private:
         [[nodiscard]] bool isComplete() const { return graphicsFamily.has_value() && presetFamily.has_value(); }
     };
 
+    struct SwapChainSupportDetails {
+        VkSurfaceCapabilitiesKHR capabilities;
+        std::vector<VkSurfaceFormatKHR> formats;
+        std::vector<VkPresentModeKHR> presentModes;
+    };
+
     void initWindow();
     void createInstance();
     void initVulkan();
@@ -49,6 +56,10 @@ private:
     void pickPhysicalDevice();
     void createLogicalDevice();
     void createSurface();
+    QueueFamilyIndices findQueueFamilies(VkPhysicalDevice pDevice);
+    SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice pDevice);
+    bool isDeviceSuitable(VkPhysicalDevice pDevice);
+    bool checkDeviceExtensionSupport(VkPhysicalDevice pDevice);
 
     static constexpr std::string_view divider = "|---------------------------------------------------------------|";
 
@@ -239,47 +250,6 @@ private:
         std::cout << divider << std::endl;
 
         return score;
-    }
-
-    /**
-     * Find supported queues on the device and tells if any of the supported queues support graphics commands.
-     *
-     * @param device
-     * @return
-     */
-    static QueueFamilyIndices findQueueFamilies(VkPhysicalDevice pDevice, VkSurfaceKHR surfaceKhr) {
-        QueueFamilyIndices indices{};
-
-        uint32_t queueFamilyCount;
-        vkGetPhysicalDeviceQueueFamilyProperties(pDevice, &queueFamilyCount, VK_NULL_HANDLE);
-
-        std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-        vkGetPhysicalDeviceQueueFamilyProperties(pDevice, &queueFamilyCount, queueFamilies.data());
-
-        for (int i = 0; i < queueFamilyCount; i++) {
-            // Right most bit in the Queue Flags will be set if the queue supports Graphics
-            if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) { indices.graphicsFamily = i; }
-
-            VkBool32 presentSupport;
-            vkGetPhysicalDeviceSurfaceSupportKHR(pDevice, i, surfaceKhr, &presentSupport);
-            if (presentSupport) { indices.presetFamily = i; }
-
-            if (indices.isComplete()) { break; }
-        }
-
-        return indices;
-    }
-
-    /**
-     * Find if provide device supports graphic queues.
-     *
-     * @param device
-     * @return
-     */
-    static bool isDeviceSuitable(VkPhysicalDevice pDevice, VkSurfaceKHR surfaceKhr) {
-        QueueFamilyIndices indices = findQueueFamilies(pDevice, surfaceKhr);
-
-        return indices.isComplete();
     }
 
     /**
