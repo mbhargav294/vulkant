@@ -1,7 +1,9 @@
+#define VK_USE_PLATFORM_WIN32_KHR
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
 #include <cstring>
-#include <format>
 #include <stdexcept>
 #include <vector>
 
@@ -18,6 +20,12 @@ VulkanStarterTriangle::VulkanStarterTriangle(int width, int height) {
 
     this->debugMessenger = VK_NULL_HANDLE;
     this->physicalDevice = VK_NULL_HANDLE;
+
+    this->device = VK_NULL_HANDLE;
+    this->surface = VK_NULL_HANDLE;
+
+    this->graphicsQueue = VK_NULL_HANDLE;
+    this->presentQueue = VK_NULL_HANDLE;
 }
 
 void VulkanStarterTriangle::run() {
@@ -46,6 +54,7 @@ void VulkanStarterTriangle::initWindow() {
 void VulkanStarterTriangle::initVulkan() {
     createInstance();
     setupDebugMessenger();
+    createSurface();
     pickPhysicalDevice();
     createLogicalDevice();
 }
@@ -105,6 +114,7 @@ void VulkanStarterTriangle::cleanup() {
     DestroyDebugUtilsMessengerEXT(instance, debugMessenger, VK_NULL_HANDLE);
 #endif
     vkDestroyDevice(device, VK_NULL_HANDLE);
+    vkDestroySurfaceKHR(instance, surface, VK_NULL_HANDLE);
     vkDestroyInstance(instance, VK_NULL_HANDLE);
     glfwDestroyWindow(window);
     glfwTerminate();
@@ -157,27 +167,36 @@ void VulkanStarterTriangle::pickPhysicalDevice() {
         }
     }
 
-    if (0 == maxScore || !isDeviceSuitable(selectedDevice)) {
+    if (0 == maxScore || !isDeviceSuitable(selectedDevice, surface)) {
         throw std::runtime_error("Failed to find suitable GPU!");
     }
     physicalDevice = selectedDevice;
 }
 
 void VulkanStarterTriangle::createLogicalDevice() {
-    QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+    QueueFamilyIndices indices = findQueueFamilies(physicalDevice, surface);
+
+    std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+    std::set<uint32_t> uniqueQueueFamilies = {indices.graphicsFamily.value(), indices.presetFamily.value()};
+
     float queuePriority = 1.0f;
-    VkDeviceQueueCreateInfo queueCreateInfo{
-            .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-            .queueFamilyIndex = indices.graphicsFamily.value(),
-            .queueCount = 1,
-            .pQueuePriorities = &queuePriority,
-    };
-    VkPhysicalDeviceFeatures deviceFeatures{};
+    for (uint32_t queueFamily: uniqueQueueFamilies) {
+        VkDeviceQueueCreateInfo queueCreateInfo{
+                .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+                .queueFamilyIndex = queueFamily,
+                .queueCount = 1,
+                .pQueuePriorities = &queuePriority,
+        };
+
+        queueCreateInfos.push_back(queueCreateInfo);
+    }
+
+    VkPhysicalDeviceFeatures deviceFeatures;
 
     VkDeviceCreateInfo createInfo{
             .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
             .queueCreateInfoCount = 1,
-            .pQueueCreateInfos = &queueCreateInfo,
+            .pQueueCreateInfos = queueCreateInfos.data(),
             .enabledExtensionCount = 0,
             .pEnabledFeatures = &deviceFeatures,
     };
@@ -194,4 +213,17 @@ void VulkanStarterTriangle::createLogicalDevice() {
     }
 
     vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
+    vkGetDeviceQueue(device, indices.presetFamily.value(), 0, &presentQueue);
+}
+
+void VulkanStarterTriangle::createSurface() {
+    VkWin32SurfaceCreateInfoKHR createInfo{
+            .sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
+            .hinstance = GetModuleHandle(VK_NULL_HANDLE),
+            .hwnd = glfwGetWin32Window(window),
+    };
+
+    if (vkCreateWin32SurfaceKHR(instance, &createInfo, VK_NULL_HANDLE, &surface) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create window surface!");
+    }
 }

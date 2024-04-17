@@ -1,5 +1,8 @@
+#define VK_USE_PLATFORM_WIN32_KHR
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
 #include <format>
 #include <iomanip>
 #include <iostream>
@@ -25,12 +28,15 @@ private:
     std::vector<const char *> validationLayers;
     VkPhysicalDevice physicalDevice;
     VkDevice device;
+    VkSurfaceKHR surface;
     VkQueue graphicsQueue;
+    VkQueue presentQueue;
 
     struct QueueFamilyIndices {
         std::optional<uint32_t> graphicsFamily;
+        std::optional<uint32_t> presetFamily;
 
-        [[nodiscard]] bool isComplete() const { return graphicsFamily.has_value(); }
+        [[nodiscard]] bool isComplete() const { return graphicsFamily.has_value() && presetFamily.has_value(); }
     };
 
     void initWindow();
@@ -42,6 +48,7 @@ private:
     void setupDebugMessenger();
     void pickPhysicalDevice();
     void createLogicalDevice();
+    void createSurface();
 
     static constexpr std::string_view divider = "|---------------------------------------------------------------|";
 
@@ -240,22 +247,24 @@ private:
      * @param device
      * @return
      */
-    static QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
+    static QueueFamilyIndices findQueueFamilies(VkPhysicalDevice pDevice, VkSurfaceKHR surfaceKhr) {
         QueueFamilyIndices indices{};
 
         uint32_t queueFamilyCount;
-        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, VK_NULL_HANDLE);
+        vkGetPhysicalDeviceQueueFamilyProperties(pDevice, &queueFamilyCount, VK_NULL_HANDLE);
 
         std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+        vkGetPhysicalDeviceQueueFamilyProperties(pDevice, &queueFamilyCount, queueFamilies.data());
 
         for (int i = 0; i < queueFamilyCount; i++) {
             // Right most bit in the Queue Flags will be set if the queue supports Graphics
-            if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-                indices.graphicsFamily = i;
+            if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) { indices.graphicsFamily = i; }
 
-                if (indices.isComplete()) { break; }
-            }
+            VkBool32 presentSupport;
+            vkGetPhysicalDeviceSurfaceSupportKHR(pDevice, i, surfaceKhr, &presentSupport);
+            if (presentSupport) { indices.presetFamily = i; }
+
+            if (indices.isComplete()) { break; }
         }
 
         return indices;
@@ -267,8 +276,8 @@ private:
      * @param device
      * @return
      */
-    static bool isDeviceSuitable(VkPhysicalDevice device) {
-        QueueFamilyIndices indices = findQueueFamilies(device);
+    static bool isDeviceSuitable(VkPhysicalDevice pDevice, VkSurfaceKHR surfaceKhr) {
+        QueueFamilyIndices indices = findQueueFamilies(pDevice, surfaceKhr);
 
         return indices.isComplete();
     }
