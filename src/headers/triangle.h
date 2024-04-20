@@ -32,6 +32,10 @@ private:
     VkSurfaceKHR surface;
     VkQueue graphicsQueue;
     VkQueue presentQueue;
+    VkSwapchainKHR swapChain;
+    std::vector<VkImage> swapChainImages;
+    VkFormat swapChainImageFormat;
+    VkExtent2D swapChainExtent{};
 
     struct QueueFamilyIndices {
         std::optional<uint32_t> graphicsFamily;
@@ -56,10 +60,15 @@ private:
     void pickPhysicalDevice();
     void createLogicalDevice();
     void createSurface();
+    void createSwapChain();
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice pDevice);
     SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice pDevice);
     bool isDeviceSuitable(VkPhysicalDevice pDevice);
     bool checkDeviceExtensionSupport(VkPhysicalDevice pDevice);
+    VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities);
+
+    static VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &availableFormats);
+    static VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR> &availablePresentMode);
 
     static constexpr std::string_view divider = "|---------------------------------------------------------------|";
 

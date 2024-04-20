@@ -3,7 +3,10 @@
 #include <GLFW/glfw3.h>
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
+#include <algorithm>  // For std::clamp in chooseSwapExtent
+#include <cstdint>    // For uint32_t
 #include <cstring>
+#include <limits>  // For std::numeric_limits in chooseSwapExtent
 #include <stdexcept>
 #include <vector>
 
@@ -28,6 +31,9 @@ VulkanStarterTriangle::VulkanStarterTriangle(int width, int height) {
 
     this->graphicsQueue = VK_NULL_HANDLE;
     this->presentQueue = VK_NULL_HANDLE;
+
+    this->swapChain = VK_NULL_HANDLE;
+    this->swapChainImageFormat = VK_FORMAT_UNDEFINED;
 }
 
 void VulkanStarterTriangle::run() {
@@ -59,6 +65,7 @@ void VulkanStarterTriangle::initVulkan() {
     createSurface();
     pickPhysicalDevice();
     createLogicalDevice();
+    createSwapChain();
 }
 
 void VulkanStarterTriangle::createInstance() {
@@ -115,6 +122,7 @@ void VulkanStarterTriangle::cleanup() {
 #ifndef NDEBUG
     DestroyDebugUtilsMessengerEXT(instance, debugMessenger, VK_NULL_HANDLE);
 #endif
+    vkDestroySwapchainKHR(device, swapChain, VK_NULL_HANDLE);
     vkDestroyDevice(device, VK_NULL_HANDLE);
     vkDestroySurfaceKHR(instance, surface, VK_NULL_HANDLE);
     vkDestroyInstance(instance, VK_NULL_HANDLE);
@@ -199,7 +207,8 @@ void VulkanStarterTriangle::createLogicalDevice() {
             .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
             .queueCreateInfoCount = 1,
             .pQueueCreateInfos = queueCreateInfos.data(),
-            .enabledExtensionCount = 0,
+            .enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size()),
+            .ppEnabledExtensionNames = deviceExtensions.data(),
             .pEnabledFeatures = &deviceFeatures,
     };
 
@@ -281,6 +290,63 @@ bool VulkanStarterTriangle::checkDeviceExtensionSupport(VkPhysicalDevice pDevice
     return requiredExtensions.empty();
 }
 
+void VulkanStarterTriangle::createSwapChain() {
+    SwapChainSupportDetails swapChainSupport = querySwapChainSupport(physicalDevice);
+
+    VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats);
+    VkPresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
+    VkExtent2D extent = chooseSwapExtent(swapChainSupport.capabilities);
+
+    uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
+    if (swapChainSupport.capabilities.maxImageCount > 0 && imageCount > swapChainSupport.capabilities.maxImageCount) {
+        imageCount = swapChainSupport.capabilities.maxImageCount;
+    }
+
+    VkSwapchainCreateInfoKHR createInfo{
+            .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+            .surface = surface,
+            .minImageCount = imageCount,
+            .imageFormat = surfaceFormat.format,
+            .imageColorSpace = surfaceFormat.colorSpace,
+            .imageExtent = extent,
+            .imageArrayLayers = 1,                              // Must always be 1, except for Stereoscopic 3D
+            .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,  // Directly render to screen without any postprocessing
+    };
+
+    QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+    uint32_t queueFamilyIndices[] = {
+            indices.graphicsFamily.value(),
+            indices.presetFamily.value(),
+    };
+
+    if (indices.graphicsFamily != indices.presetFamily) {
+        createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+        createInfo.queueFamilyIndexCount = 2;
+        createInfo.pQueueFamilyIndices = queueFamilyIndices;
+    } else {
+        createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        createInfo.queueFamilyIndexCount = 0;             // Optional
+        createInfo.pQueueFamilyIndices = VK_NULL_HANDLE;  // Optional
+    }
+
+    createInfo.preTransform = swapChainSupport.capabilities.currentTransform;
+    createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;  // Ignore alpha, used for window transparency
+    createInfo.presentMode = presentMode;
+    createInfo.clipped = VK_TRUE;              // Will not compute the pixels obscured by other windows
+    createInfo.oldSwapchain = VK_NULL_HANDLE;  // Resizing windows not allowed
+
+    if (vkCreateSwapchainKHR(device, &createInfo, VK_NULL_HANDLE, &swapChain) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create swap chain!");
+    }
+
+    vkGetSwapchainImagesKHR(device, swapChain, &imageCount, VK_NULL_HANDLE);
+    swapChainImages.resize(imageCount);
+    vkGetSwapchainImagesKHR(device, swapChain, &imageCount, swapChainImages.data());
+
+    swapChainImageFormat = surfaceFormat.format;
+    swapChainExtent = extent;
+}
+
 VulkanStarterTriangle::SwapChainSupportDetails VulkanStarterTriangle::querySwapChainSupport(VkPhysicalDevice pDevice) {
     VulkanStarterTriangle::SwapChainSupportDetails details;
 
@@ -303,4 +369,52 @@ VulkanStarterTriangle::SwapChainSupportDetails VulkanStarterTriangle::querySwapC
     }
 
     return details;
+}
+
+VkSurfaceFormatKHR
+VulkanStarterTriangle::chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &availableFormats) {
+    for (const auto &availableFormat: availableFormats) {
+        if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB &&
+            availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+            return availableFormat;
+        }
+    }
+    return availableFormats[0];
+}
+
+VkPresentModeKHR
+VulkanStarterTriangle::chooseSwapPresentMode(const std::vector<VkPresentModeKHR> &availablePresentModes) {
+    // Similar to VSync
+    //    return VK_PRESENT_MODE_FIFO_KHR;
+
+    // Triple Buffering
+    //    return VK_PRESENT_MODE_MAILBOX_KHR;
+
+    // Might result in tearing
+    //    return VK_PRESENT_MODE_IMMEDIATE_KHR;
+
+    for (const auto &presentMode: availablePresentModes) {
+        if (presentMode == VK_PRESENT_MODE_MAILBOX_KHR) { return presentMode; }
+    }
+
+    // This should be always present
+    return VK_PRESENT_MODE_FIFO_KHR;
+}
+
+VkExtent2D VulkanStarterTriangle::chooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities) {
+    if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
+        return capabilities.currentExtent;
+    } else {
+        int w, h;
+        glfwGetFramebufferSize(window, &w, &h);
+
+        VkExtent2D actualExtent = {static_cast<uint32_t>(w), static_cast<uint32_t>(h)};
+
+        actualExtent.width =
+                std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
+        actualExtent.height =
+                std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+
+        return actualExtent;
+    }
 }
