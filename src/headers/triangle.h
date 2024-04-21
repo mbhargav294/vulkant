@@ -36,6 +36,7 @@ private:
     std::vector<VkImage> swapChainImages;
     VkFormat swapChainImageFormat;
     VkExtent2D swapChainExtent{};
+    std::vector<VkImageView> swapChainImageViews;
 
     struct QueueFamilyIndices {
         std::optional<uint32_t> graphicsFamily;
@@ -61,6 +62,7 @@ private:
     void createLogicalDevice();
     void createSurface();
     void createSwapChain();
+    void createImageViews();
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice pDevice);
     SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice pDevice);
     bool isDeviceSuitable(VkPhysicalDevice pDevice);
