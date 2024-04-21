@@ -67,6 +67,7 @@ void VulkanStarterTriangle::initVulkan() {
     createLogicalDevice();
     createSwapChain();
     createImageViews();
+    createGraphicsPipeline();
 }
 
 void VulkanStarterTriangle::createInstance() {
@@ -378,6 +379,47 @@ void VulkanStarterTriangle::createImageViews() {
             throw std::runtime_error("Failed to create image views!");
         }
     }
+}
+
+void VulkanStarterTriangle::createGraphicsPipeline() {
+    auto vertShaderCode = readFile("../build/vert.spv");
+    auto fragShaderCode = readFile("../build/frag.spv");
+
+    VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
+    VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
+
+    VkPipelineShaderStageCreateInfo vertShaderStageInfo = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = VK_SHADER_STAGE_VERTEX_BIT,
+            .module = vertShaderModule,
+            .pName = "main",
+    };
+
+    VkPipelineShaderStageCreateInfo fragShaderStageInfo = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .module = fragShaderModule,
+            .pName = "main",
+    };
+
+    VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+
+    vkDestroyShaderModule(device, fragShaderModule, VK_NULL_HANDLE);
+    vkDestroyShaderModule(device, vertShaderModule, VK_NULL_HANDLE);
+}
+
+VkShaderModule VulkanStarterTriangle::createShaderModule(const std::vector<char> &code) {
+    VkShaderModuleCreateInfo createInfo = {
+            .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+            .codeSize = code.size(),
+            .pCode = reinterpret_cast<const uint32_t *>(code.data()),
+    };
+
+    VkShaderModule shaderModule;
+    if (vkCreateShaderModule(device, &createInfo, VK_NULL_HANDLE, &shaderModule) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create shader module!");
+    }
+    return shaderModule;
 }
 
 VulkanStarterTriangle::SwapChainSupportDetails VulkanStarterTriangle::querySwapChainSupport(VkPhysicalDevice pDevice) {

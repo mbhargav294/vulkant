@@ -4,6 +4,7 @@
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
 #include <format>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <optional>
@@ -63,14 +64,31 @@ private:
     void createSurface();
     void createSwapChain();
     void createImageViews();
+    void createGraphicsPipeline();
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice pDevice);
     SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice pDevice);
     bool isDeviceSuitable(VkPhysicalDevice pDevice);
     bool checkDeviceExtensionSupport(VkPhysicalDevice pDevice);
     VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities);
+    VkShaderModule createShaderModule(const std::vector<char> &code);
 
     static VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &availableFormats);
     static VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR> &availablePresentMode);
+
+    static std::vector<char> readFile(const std::string &filename) {
+        std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+        if (!file.is_open()) { throw std::runtime_error("Failed to open file!"); }
+
+        size_t fileSize = (size_t) file.tellg();
+        std::vector<char> buffer(fileSize);
+
+        file.seekg(0);
+        file.read(buffer.data(), fileSize);
+
+        file.close();
+        return buffer;
+    }
 
     static constexpr std::string_view divider = "|---------------------------------------------------------------|";
 
